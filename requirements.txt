@@ -1,0 +1,17 @@
+# AI Brand Content Strategist — Dependencies
+# Install with: pip install -r requirements.txt
+
+# Google Agent Development Kit — multi-agent orchestration framework
+google-adk>=1.2.0
+
+# FastMCP — lightweight MCP server framework (stdio transport)
+fastmcp>=2.0.0
+
+# Environment variable management — keeps secrets out of code
+python-dotenv>=1.0.0
+
+# Pillow — image generation for branded infographics
+Pillow>=10.0.0
+
+# HTTP requests — for real search API calls and LinkedIn API
+requests>=2.31.0

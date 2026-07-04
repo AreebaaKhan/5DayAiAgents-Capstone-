@@ -1,0 +1,16 @@
+{
+    "name": "Python Mentor",
+    "niche": "Python Programming & Software Engineering",
+    "tone": "Educational, encouraging, technically precise but approachable",
+    "audience": "Junior to mid-level Python developers, career switchers, CS students",
+    "posting_goal": "Establish thought leadership in Python education, attract mentoring clients, and build a community of learners",
+    "posting_frequency": "Daily",
+    "example_topics": [
+        "Python best practices and clean code",
+        "Common beginner mistakes and how to avoid them",
+        "Career advice for developers",
+        "New Python features and when to use them",
+        "Design patterns in Python",
+        "Code review tips and techniques"
+    ]
+}
