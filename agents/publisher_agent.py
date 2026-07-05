@@ -15,9 +15,24 @@ OUTPUT KEY: "publish_result" → final pipeline output stored in session state.
 
 import os
 import json
+import sys
 from datetime import datetime
 
 from google.adk.agents import Agent
+from utils.model_config import get_model_name
+
+
+def _safe_print(text: str) -> None:
+    """Print text safely, replacing emoji on terminals that can't handle them."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode("ascii", errors="replace").decode("ascii"))
+
+
+def _is_auto_approval_enabled() -> bool:
+    """Return True when approval should complete automatically."""
+    return os.environ.get("CONTENT_PIPELINE_APPROVAL_MODE", "").strip().lower() == "auto"
 
 
 # ── Tool: request_human_approval ──────────────────────────────────────
@@ -40,6 +55,25 @@ def request_human_approval(
     Returns:
         dict with the approval decision and optional feedback.
     """
+    if _is_auto_approval_enabled():
+        print("\n" + "=" * 60)
+        print("🔔  HUMAN APPROVAL REQUIRED")
+        print("=" * 60)
+        print("\n📝 LINKEDIN POST FOR REVIEW:")
+        print("-" * 40)
+        print(post_content)
+        print("-" * 40)
+        print(f"\n🖼️  Generated Image: {image_path}")
+        print("\n✅ Auto-approval enabled for web/non-interactive mode.")
+        print("=" * 60 + "\n")
+
+        return {
+            "approved": True,
+            "decision": "auto_approved",
+            "feedback": "Auto-approved by CONTENT_PIPELINE_APPROVAL_MODE=auto",
+            "timestamp": datetime.now().isoformat(),
+        }
+
     print("\n" + "=" * 60)
     print("🔔  HUMAN APPROVAL REQUIRED")
     print("=" * 60)
@@ -119,13 +153,13 @@ def simulate_publish(post_content: str, image_path: str) -> dict:
     with open(record_path, "w", encoding="utf-8") as f:
         json.dump(publish_record, f, indent=2)
 
-    print("\n" + "=" * 60)
-    print("📤  SIMULATED PUBLISH")
-    print("=" * 60)
-    print("⚠️  This is a SIMULATION — no real LinkedIn post was created.")
-    print(f"📄 Publish record saved: {record_path}")
-    print("💡 To enable real publishing, set LINKEDIN_ACCESS_TOKEN in .env")
-    print("=" * 60 + "\n")
+    _safe_print("\n" + "=" * 60)
+    _safe_print("SIMULATED PUBLISH")
+    _safe_print("=" * 60)
+    _safe_print("This is a SIMULATION -- no real LinkedIn post was created.")
+    _safe_print(f"Publish record saved: {record_path}")
+    _safe_print("To enable real publishing, set LINKEDIN_ACCESS_TOKEN in .env")
+    _safe_print("=" * 60 + "\n")
 
     return publish_record
 
@@ -231,7 +265,7 @@ def create_publisher_agent() -> Agent:
     """
     return Agent(
         name="publisher_agent",
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         description="Presents content for human approval and handles publishing to LinkedIn.",
         instruction="""You are the final agent in the content strategy pipeline.
 Your job is to present the completed content for human approval and handle publishing.

@@ -23,6 +23,7 @@ from google.adk.tools.mcp_tool.mcp_toolset import (
     StdioConnectionParams,
     StdioServerParameters,
 )
+from utils.model_config import get_model_name
 
 
 def create_research_agent() -> Agent:
@@ -61,7 +62,7 @@ def create_research_agent() -> Agent:
 
     return Agent(
         name="research_agent",
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         description=(
             "Researches current trends, statistics, and competitor content "
             "using MCP-connected research tools."

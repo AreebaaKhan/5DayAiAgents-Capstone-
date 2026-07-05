@@ -9,6 +9,7 @@ OUTPUT KEY: "linkedin_post" → stored in session state for Visual and Publisher
 """
 
 from google.adk.agents import Agent
+from utils.model_config import get_model_name
 
 
 def create_writer_agent(persona: dict) -> Agent:
@@ -27,7 +28,7 @@ def create_writer_agent(persona: dict) -> Agent:
     """
     return Agent(
         name="writer_agent",
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         description="Writes a professional LinkedIn post using the planned topic and research.",
         instruction=f"""You are an expert LinkedIn content writer.
 

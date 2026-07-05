@@ -2,7 +2,7 @@
 
 > **A multi-agent AI system that autonomously plans, researches, writes, illustrates, and publishes LinkedIn content.**
 
-Built for the **Google + Kaggle 5-Day AI Agents Capstone** hackathon, this project demonstrates modern AI agent concepts: multi-agent orchestration, tool use via MCP, human-in-the-loop oversight, and graceful fallback design.
+Built for the **Google + Kaggle 5-Day AI Agents Capstone** hackathon, this project demonstrates modern AI agent concepts: multi-agent orchestration, tool use via MCP, human-in-the-loop oversight, graceful fallback design, and now a browser UI on top of the existing CLI pipeline.
 
 ---
 
@@ -36,7 +36,8 @@ Each step requires different expertise. Instead of a single monolithic LLM call,
 
 ```
                     ┌──────────────────────────┐
-                    │      CLI (cli.py)         │
+                    │   CLI (cli.py) /          │
+                    │   Streamlit UI            │
                     │   Persona Selection &     │
                     │   Pipeline Launcher       │
                     └───────────┬──────────────┘
@@ -129,6 +130,7 @@ This is **not simulated approval** — the system truly waits for human action.
 ```
 Project/
 ├── cli.py                  # Main entry point — interactive CLI
+├── streamlit_app.py        # Browser UI for running the pipeline
 ├── pipeline.py             # SequentialAgent orchestrator
 ├── requirements.txt        # Python dependencies
 ├── .env.example            # Environment variable template
@@ -251,6 +253,14 @@ The CLI will:
 4. Run the full 5-agent pipeline
 5. Pause for your approval before publishing
 6. Display results and save outputs
+
+### Browser UI
+
+```bash
+streamlit run streamlit_app.py
+```
+
+The browser UI lets you select a persona, launch the pipeline, and review the generated post, research brief, image, and publish record in tabs. Because the original approval step is CLI-based, the Streamlit app uses automatic approval so the run can complete in the browser. Use the CLI if you want to manually type approve/reject responses.
 
 ### Expected Output
 

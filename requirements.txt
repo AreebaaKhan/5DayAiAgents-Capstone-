@@ -15,3 +15,6 @@ Pillow>=10.0.0
 
 # HTTP requests — for real search API calls and LinkedIn API
 requests>=2.31.0
+
+# Streamlit — browser-based UI for the content pipeline
+streamlit>=1.37.0

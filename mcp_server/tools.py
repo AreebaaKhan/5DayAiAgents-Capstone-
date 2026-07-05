@@ -7,16 +7,20 @@ No direct Python imports of these functions exist in any agent code.
 
 SEARCH STRATEGY:
   1. If SERPER_API_KEY is set → uses Serper.dev REST API for real web search
-  2. Otherwise → returns realistic mock data, clearly labeled as fallback
+  2. Otherwise → uses FREE DuckDuckGo HTML search (no API key needed)
+  3. If both fail → returns realistic mock data, clearly labeled as fallback
 
-The mock data is intentionally high-quality so the demo pipeline always
-produces credible output, even without an API key.
+The DuckDuckGo fallback ensures the pipeline ALWAYS has real, live search
+results, even without any API keys configured.
 """
 
 import json
 import os
+import re
+import html as html_module
 from datetime import datetime
 from typing import Optional
+from urllib.parse import unquote
 
 
 # ── Real search helper (Serper.dev) ───────────────────────────────────
@@ -26,7 +30,7 @@ def _get_serper_results(query: str, num_results: int = 5) -> Optional[list[dict]
     Attempt a real web search via the Serper.dev REST API.
 
     Returns None if the API key is missing, requests is unavailable,
-    or the API call fails — so callers can fall back to mock data.
+    or the API call fails — so callers can fall back to DuckDuckGo or mock data.
     """
     api_key = os.environ.get("SERPER_API_KEY")
     if not api_key:
@@ -55,8 +59,102 @@ def _get_serper_results(query: str, num_results: int = 5) -> Optional[list[dict]
             for item in data.get("organic", [])[:num_results]
         ]
     except Exception:
-        # Any failure → return None so caller falls back to mock data
+        # Any failure → return None so caller falls back
         return None
+
+
+# ── Free search helper (DuckDuckGo HTML — no API key needed) ─────────
+
+def _get_ddg_results(query: str, num_results: int = 5) -> Optional[list[dict]]:
+    """
+    Perform a free web search using DuckDuckGo's HTML endpoint.
+
+    This requires NO API key and works out of the box. Results are parsed
+    from the HTML response using regex. Returns None only on network failure.
+    """
+    try:
+        import requests
+    except ImportError:
+        return None
+
+    try:
+        url = "https://html.duckduckgo.com/html/"
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/119.0.0.0 Safari/537.36"
+            )
+        }
+        params = {"q": query}
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        raw_html = resp.text
+
+        # Split by result divs
+        divs = re.split(
+            r'<div[^>]*class="[^"]*web-result[^"]*"[^>]*>', raw_html
+        )
+
+        results = []
+        for div in divs[1:]:
+            title_match = re.search(
+                r'<a\s+[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+                div, re.DOTALL,
+            )
+            snippet_match = re.search(
+                r'<a\s+[^>]*class="result__snippet"[^>]*>(.*?)</a>',
+                div, re.DOTALL,
+            )
+
+            if title_match:
+                href = title_match.group(1)
+                title = re.sub(r'<[^>]+>', '', title_match.group(2)).strip()
+                title = html_module.unescape(title)
+
+                # Extract clean URL from DDG redirect
+                if "uddg=" in href:
+                    actual_url = unquote(href.split("uddg=")[1].split("&")[0])
+                else:
+                    actual_url = href
+                if actual_url.startswith("//"):
+                    actual_url = "https:" + actual_url
+
+                snippet = ""
+                if snippet_match:
+                    snippet = re.sub(r'<[^>]+>', '', snippet_match.group(1)).strip()
+                    snippet = html_module.unescape(snippet)
+
+                results.append({
+                    "title": title,
+                    "snippet": snippet,
+                    "link": actual_url,
+                })
+
+                if len(results) >= num_results:
+                    break
+
+        return results if results else None
+    except Exception:
+        return None
+
+
+# ── Unified search helper ─────────────────────────────────────────────
+
+def _search_web(query: str, num_results: int = 5) -> tuple[Optional[list[dict]], str]:
+    """
+    Try Serper first, then DuckDuckGo, then return None.
+    Returns (results, source_label).
+    """
+    serper = _get_serper_results(query, num_results)
+    if serper:
+        return serper, "serper_api"
+
+    ddg = _get_ddg_results(query, num_results)
+    if ddg:
+        return ddg, "duckduckgo_free"
+
+    return None, "mock_fallback"
 
 
 # ── MCP Tool: search_trends ──────────────────────────────────────────
@@ -73,25 +171,26 @@ def search_trends(topic: str, niche: str) -> str:
     Returns:
         JSON string with trending information.
     """
-    real_results = _get_serper_results(f"{topic} {niche} trends 2026")
+    query = f"{topic} {niche} trends 2026"
+    results, source = _search_web(query)
 
-    if real_results:
+    if results:
         return json.dumps({
-            "source": "live_search",
-            "query": f"{topic} {niche} trends 2026",
+            "source": f"live_search ({source})",
+            "query": query,
             "date": datetime.now().strftime("%Y-%m-%d"),
-            "results": real_results,
-            "note": "Real search results from Serper.dev API",
+            "results": results,
+            "note": f"Real search results via {source}",
         }, indent=2)
 
     # ── Fallback: realistic mock data ─────────────────────────────
     return json.dumps({
         "source": "mock_fallback",
         "note": (
-            "MOCK DATA — No search API key configured. "
-            "Set SERPER_API_KEY in .env for real results."
+            "MOCK DATA — Both Serper and DuckDuckGo search failed. "
+            "Using realistic fallback data."
         ),
-        "query": f"{topic} {niche} trends 2026",
+        "query": query,
         "date": datetime.now().strftime("%Y-%m-%d"),
         "trends": [
             {
@@ -135,22 +234,23 @@ def search_statistics(topic: str) -> str:
     Returns:
         JSON string with statistics and data points.
     """
-    real_results = _get_serper_results(f"{topic} statistics data 2026")
+    query = f"{topic} statistics data 2026"
+    results, source = _search_web(query)
 
-    if real_results:
+    if results:
         return json.dumps({
-            "source": "live_search",
-            "query": f"{topic} statistics data 2026",
+            "source": f"live_search ({source})",
+            "query": query,
             "date": datetime.now().strftime("%Y-%m-%d"),
-            "results": real_results,
-            "note": "Real search results from Serper.dev API",
+            "results": results,
+            "note": f"Real search results via {source}",
         }, indent=2)
 
     return json.dumps({
         "source": "mock_fallback",
         "note": (
-            "MOCK DATA — No search API key configured. "
-            "Set SERPER_API_KEY in .env for real results."
+            "MOCK DATA — Both Serper and DuckDuckGo search failed. "
+            "Using realistic fallback data."
         ),
         "query": f"{topic} statistics 2026",
         "date": datetime.now().strftime("%Y-%m-%d"),
@@ -196,24 +296,23 @@ def search_competitor_content(niche: str) -> str:
     Returns:
         JSON string with competitor content analysis.
     """
-    real_results = _get_serper_results(
-        f"{niche} LinkedIn thought leaders content 2026"
-    )
+    query = f"{niche} LinkedIn thought leaders content 2026"
+    results, source = _search_web(query)
 
-    if real_results:
+    if results:
         return json.dumps({
-            "source": "live_search",
-            "query": f"{niche} LinkedIn thought leaders 2026",
+            "source": f"live_search ({source})",
+            "query": query,
             "date": datetime.now().strftime("%Y-%m-%d"),
-            "results": real_results,
-            "note": "Real search results from Serper.dev API",
+            "results": results,
+            "note": f"Real search results via {source}",
         }, indent=2)
 
     return json.dumps({
         "source": "mock_fallback",
         "note": (
-            "MOCK DATA — No search API key configured. "
-            "Set SERPER_API_KEY in .env for real results."
+            "MOCK DATA — Both Serper and DuckDuckGo search failed. "
+            "Using realistic fallback data."
         ),
         "query": f"{niche} competitor content analysis",
         "date": datetime.now().strftime("%Y-%m-%d"),
